@@ -169,7 +169,7 @@ func (e *EnvVars) getPath(c *gin.Context) {
 
 	opts := options.Update().SetUpsert(true)
 	filter = bson.D{{Key: "_id", Value: result.ID}}
-	update := bson.D{{Key: "$set", Value: bson.D{{"clicks", result.Clicks + 1}}}}
+	update := bson.D{{Key: "$set", Value: bson.D{{Key: "clicks", Value: result.Clicks + 1}}}}
 
 	collection.UpdateOne(e.ctx, filter, update, opts)
 
