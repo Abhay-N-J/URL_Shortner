@@ -156,7 +156,11 @@ func (e *EnvVars) createShort(c *gin.Context) {
 
 func (e *EnvVars) getPath(c *gin.Context) {
 	short := c.Param("path")
-
+	fmt.Println("FF", short)
+	if short == "" {
+		c.Redirect(http.StatusMisdirectedRequest, "/home")
+		return
+	}
 	collection := e.client.Database("URL_Shortner").Collection("ShortURLsV2")
 
 	filter := bson.D{
@@ -224,9 +228,9 @@ func main() {
 		mt:     &mt,
 	}
 
-	r.Any("/", welcomeFunc)
+	r.Any("/home", welcomeFunc)
 	r.POST("/create/", e.createShort)
-	r.GET("/link/:path", e.getPath)
+	r.GET("/:path", e.getPath)
 
 	r.Run("localhost:8001")
 }
