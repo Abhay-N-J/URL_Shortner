@@ -51,15 +51,21 @@ func (e *EnvVars) Base62() (string, error) {
 		result = string(chars[n%62]) + result
 		n /= 62
 	}
+	// result = "bhE9mEnnPMH"
 	filter := bson.D{
 		{Key: "_id", Value: result},
 	}
-	collection := e.client.Database("URL_Shortner").Collection("ShortURLs")
-	err := collection.FindOne(e.ctx, filter).Decode(&result)
+	var doc URLdoc
+	collection := e.client.Database("URL_Shortner").Collection("ShortURLsV2")
+	err := collection.FindOne(e.ctx, filter).Decode(&doc)
+	if err == mongo.ErrNoDocuments {
+		return result, errors.New("Create")
+	}
+	if doc.Date.Unix() < time.Now().Unix() {
+		return result, errors.New("Update")
+	}
 	if err == nil {
 		return e.Base62()
-	} else if err == mongo.ErrNoDocuments {
-		return result, nil
 	} else {
 		return " ", err
 	}
@@ -99,7 +105,7 @@ func (e *EnvVars) createShort(c *gin.Context) {
 	}
 	fmt.Println("Link: ", document.Long)
 
-	document.Date = time.Now().Add(time.Hour * 300)
+	document.Date = time.Now().Add(time.Hour * 60)
 	document.Clicks = 0
 
 	// model := mongo.IndexModel{
@@ -121,7 +127,14 @@ func (e *EnvVars) createShort(c *gin.Context) {
 		short, err = e.Base62()
 		// short = "bhE9mEnnPMH"
 		document.ID = short
+		if err.Error() == "Update" {
+			filter := bson.D{
+				{Key: "_id", Value: short},
+			}
+			collection.DeleteOne(e.ctx, filter)
+		}
 		_, err = collection.InsertOne(e.ctx, document)
+
 		fmt.Println("Error: ", err)
 	}
 
@@ -166,7 +179,14 @@ func (e *EnvVars) getPath(c *gin.Context) {
 		})
 		return
 	}
-
+	if result.Date.Unix() < time.Now().Unix() {
+		filter = bson.D{{Key: "_id", Value: result.ID}}
+		collection.DeleteOne(e.ctx, filter)
+		c.JSON(410, gin.H{
+			"message": "Link Expired",
+		})
+		return
+	}
 	opts := options.Update().SetUpsert(true)
 	filter = bson.D{{Key: "_id", Value: result.ID}}
 	update := bson.D{{Key: "$set", Value: bson.D{{Key: "clicks", Value: result.Clicks + 1}}}}
