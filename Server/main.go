@@ -51,8 +51,8 @@ func main() {
 	r.Any("/home", welcomeFunc)
 	r.POST("/create/", e.CreateShort)
 	r.GET("/:path", e.GetPath)
-	// r.POST("/named", e.createNamed)
-	// r.GET("/:name/:path", e.getNamed)
+	r.POST("/named/", e.CreateNamed)
+	// r.GET("/:name/:path", e.GetNamed)
 
 	r.Run("localhost:8001")
 }

@@ -23,13 +23,30 @@ type EnvVars struct {
 }
 
 type URLdoc struct {
-	ID     string    `json:"_id,omitempty" bson:"_id"`
-	Long   string    `json:"long" bson:"long"`
-	Date   time.Time `json:"date,omitempty" bson:"date"`
-	Clicks int       `josn:"clicks,omitempty" bson:"clicks"`
+	ID           string    `json:"_id,omitempty" bson:"_id"`
+	Long         string    `json:"long" bson:"long"`
+	ExpiryDate   time.Time `json:"expiry,omitempty" bson:"expiry"`
+	CreationDate time.Time `json:"creation,omitempty" bson:"creation"`
+	Clicks       int       `josn:"clicks,omitempty" bson:"clicks"`
 }
 
-// Base62 encodes the given counter into a
+type URL struct {
+	Long       string
+	ExpiryDate time.Time
+	Clicks     int
+}
+
+type USERdoc struct {
+	ID         string         `json:"user" bson:"_id"`
+	Email      string         `json:"email" bson:"email"`
+	Passwd     string         `json:"pass" bson:"passwd"`
+	URLs       map[string]URL `json:"urls,omitempty" bson:"urls"`
+	Short      string         `json:"short" bson:"-"`
+	Long       string         `json:"long" bson:"-"`
+	ExpiryDays int            `json:"expiry" bson:"-"`
+}
+
+// base62 encodes the given counter into a
 // unique string and returns it
 
 func (e *EnvVars) base62() (string, error) {
@@ -53,8 +70,8 @@ func (e *EnvVars) base62() (string, error) {
 	if err == mongo.ErrNoDocuments {
 		return result, errors.New("Create")
 	}
-	if doc.Date.Unix() < time.Now().Unix() {
-		return result, errors.New("Update")
+	if doc.ExpiryDate.Unix() < time.Now().Unix() {
+		return result, errors.New("UpExpiryDate")
 	}
 	if err == nil {
 		return e.base62()
@@ -63,7 +80,7 @@ func (e *EnvVars) base62() (string, error) {
 	}
 }
 
-// createShort handles the creation of ShortURL
+// CreateShort handles the creation of ShortURL
 
 func (e *EnvVars) CreateShort(c *gin.Context) {
 
@@ -73,6 +90,9 @@ func (e *EnvVars) CreateShort(c *gin.Context) {
 	var short string
 	if err := c.ShouldBindJSON(&document); err != nil {
 		fmt.Println(err)
+		c.JSON(400, gin.H{
+			"error": "Wrong input",
+		})
 		return
 	}
 	// path.Long = c.Param("path")
@@ -83,11 +103,12 @@ func (e *EnvVars) CreateShort(c *gin.Context) {
 	}
 	fmt.Println("Link: ", document.Long)
 
-	document.Date = time.Now().Add(time.Hour * 60)
+	document.ExpiryDate = time.Now().Add(time.Hour * 60)
+	document.CreationDate = time.Now()
 	document.Clicks = 0
 
 	// model := mongo.IndexModel{
-	// 	Keys:    bson.M{"date": 1},
+	// 	Keys:    bson.M{"ExpiryDate": 1},
 	// 	Options: options.Index().SetExpireAfterSeconds(0),
 	// }
 	// _, err := collection.Indexes().CreateOne(e.ctx, model)
@@ -105,7 +126,7 @@ func (e *EnvVars) CreateShort(c *gin.Context) {
 		short, err = e.base62()
 		// short = "bhE9mEnnPMH"
 		document.ID = short
-		if err.Error() == "Update" {
+		if err.Error() == "UpExpiryDate" {
 			filter := bson.D{
 				{Key: "_id", Value: short},
 			}
@@ -129,12 +150,79 @@ func (e *EnvVars) CreateShort(c *gin.Context) {
 	})
 }
 
+// CreateNamed handles the creation of Custom short URLs
+// TODO: passwd hashing
+
 func (e *EnvVars) CreateNamed(c *gin.Context) {
-	
+	collection := e.Client.Database("URL_Shortner").Collection("NamedUrlsV2")
+
+	var document USERdoc
+	var searchDoc USERdoc
+	err := c.ShouldBindJSON(&document)
+	if err != nil {
+		fmt.Println(err)
+		c.JSON(400, gin.H{
+			"error": "Wrong input",
+		})
+		return
+	}
+
+	if len(document.Long) > 10 && document.Long[0:9] != "https://" {
+		document.Long = "https://" + document.Long
+	} else {
+		document.Long = "https://" + document.Long
+	}
+	fmt.Println("Link: ", document.Long)
+
+	filter := bson.D{{Key: "_id", Value: document.ID}}
+	err = collection.FindOne(e.Ctx, filter).Decode(&searchDoc)
+	ok := false
+	if err == nil {
+		_, ok = searchDoc.URLs[document.Short]
+		fmt.Println(ok)
+	}
+	// Creation of user is handled here
+	if err == mongo.ErrNoDocuments {
+		document.URLs = make(map[string]URL)
+		document.URLs[document.Short] = URL{
+			Long:       document.Long,
+			ExpiryDate: time.Now().Add(time.Hour * 24 * time.Duration(document.ExpiryDays)),
+			Clicks:     0,
+		}
+		_, err = collection.InsertOne(e.Ctx, document)
+	} else if err == nil && ok {
+		c.JSON(400, gin.H{
+			"error": "URL Already exists",
+		})
+		return
+	} else if err == nil {
+		searchDoc.URLs[document.Short] = URL{
+			Long:       document.Long,
+			ExpiryDate: time.Now().Add(time.Hour * 24 * time.Duration(document.ExpiryDays)),
+			Clicks:     0,
+		}
+		opts := options.Update().SetUpsert(true)
+		filter = bson.D{{Key: "_id", Value: searchDoc.ID}}
+		update := bson.D{{Key: "$set", Value: bson.D{{Key: "urls", Value: searchDoc.URLs}}}}
+		_, err = collection.UpdateOne(e.Ctx, filter, update, opts)
+	}
+	if err != nil {
+		c.JSON(500, gin.H{
+			"message": "Database error",
+		})
+		fmt.Println("DB error: ", err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":  "Short URL Creation Successful",
+		"shortURL": "localhost:8001/" + document.ID + "/" + document.Short,
+	})
+
 }
 
-// getPath redirects the shortURL to its respective longURL if found in DB
-// TODO: Validate URLS | DONE!!, Search in PRO collection for named shortURLs
+// GetPath redirects the shortURL to its respective longURL if found in DB
+// TODO: ValiExpiryDate URLS | DONE!!, Search in PRO collection for named shortURLs
 
 func (e *EnvVars) GetPath(c *gin.Context) {
 	short := c.Param("path")
@@ -164,7 +252,7 @@ func (e *EnvVars) GetPath(c *gin.Context) {
 		})
 		return
 	}
-	if result.Date.Unix() < time.Now().Unix() {
+	if result.ExpiryDate.Unix() < time.Now().Unix() {
 		filter = bson.D{{Key: "_id", Value: result.ID}}
 		collection.DeleteOne(e.Ctx, filter)
 		c.JSON(410, gin.H{
