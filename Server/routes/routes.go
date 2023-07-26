@@ -217,7 +217,7 @@ func (e *EnvVars) CreateNamed(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"message":  "Short URL Creation Successful",
-		"shortURL": "localhost:8001/" + document.ID + "/" + document.Short,
+		"shortURL": "localhost:8001/" + document.Short + "/" + document.ID,
 	})
 
 }
