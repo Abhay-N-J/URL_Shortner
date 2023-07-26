@@ -155,7 +155,7 @@ func (e *EnvVars) CreateShort(c *gin.Context) {
 // CreateNamed handles the creation of Custom short URLs
 
 func (e *EnvVars) CreateNamed(c *gin.Context) {
-	collection := e.Client.Database("URL_Shortner").Collection("NamedUrlsV2")
+	collection := e.Client.Database("URL_Shortner").Collection("NamedURLsV2")
 
 	var document USERdoc
 	var searchDoc USERdoc
@@ -233,7 +233,7 @@ func (e *EnvVars) GetNamed(c *gin.Context) {
 	// 	return
 	// }
 	fmt.Println("Short", short)
-	collection := e.Client.Database("URL_Shortner").Collection("NamedUrlsV2")
+	collection := e.Client.Database("URL_Shortner").Collection("NamedURLsV2")
 
 	filter := bson.D{
 		{Key: "_id", Value: user},
