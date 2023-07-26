@@ -12,6 +12,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -150,8 +151,8 @@ func (e *EnvVars) CreateShort(c *gin.Context) {
 	})
 }
 
-// CreateNamed handles the creation of Custom short URLs
 // TODO: passwd hashing
+// CreateNamed handles the creation of Custom short URLs
 
 func (e *EnvVars) CreateNamed(c *gin.Context) {
 	collection := e.Client.Database("URL_Shortner").Collection("NamedUrlsV2")
@@ -221,15 +222,74 @@ func (e *EnvVars) CreateNamed(c *gin.Context) {
 
 }
 
+// GetNamed fetches the Long URL for custom short urls
+
+func (e *EnvVars) GetNamed(c *gin.Context) {
+	short := c.Param("path")
+	user := c.Param("name")
+
+	// if user != "" {
+	// 	go e.GetPath(c)
+	// 	return
+	// }
+	fmt.Println("Short", short)
+	collection := e.Client.Database("URL_Shortner").Collection("NamedUrlsV2")
+
+	filter := bson.D{
+		{Key: "_id", Value: user},
+	}
+
+	var result USERdoc
+	err := collection.FindOne(e.Ctx, filter).Decode(&result)
+
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			fmt.Println("Error: Page not found")
+			c.JSON(404, gin.H{
+				"message": "User and Page Not Found",
+			})
+			return
+		}
+		fmt.Println("Error: ", err)
+		c.JSON(500, gin.H{
+			"message": "DB error",
+		})
+		return
+	}
+	opts := options.Update().SetUpsert(true)
+	filter = bson.D{{Key: "_id", Value: result.ID}}
+	var update primitive.D
+	entry, ok := result.URLs[short]
+	if !ok {
+		c.JSON(404, gin.H{
+			"message": "Page Not Found",
+		})
+		return
+	}
+	if result.URLs[short].ExpiryDate.Unix() < time.Now().Unix() {
+		delete(result.URLs, short)
+		c.JSON(410, gin.H{
+			"message": "Link Expired",
+		})
+	} else {
+		entry.Clicks += 1
+		result.URLs[short] = entry
+	}
+	update = bson.D{{Key: "$set", Value: bson.D{{Key: "urls", Value: result.URLs}}}}
+	collection.UpdateOne(e.Ctx, filter, update, opts)
+
+	c.JSON(200, gin.H{
+		"long": result.URLs[short].Long,
+	})
+	// c.Redirect(http.StatusMovedPermanently, result.Long)
+
+}
+
 // GetPath redirects the shortURL to its respective longURL if found in DB
-// TODO: ValiExpiryDate URLS | DONE!!, Search in PRO collection for named shortURLs
 
 func (e *EnvVars) GetPath(c *gin.Context) {
 	short := c.Param("path")
-	if short == "" {
-		c.Redirect(http.StatusMisdirectedRequest, "/home")
-		return
-	}
+
 	collection := e.Client.Database("URL_Shortner").Collection("ShortURLsV2")
 
 	filter := bson.D{

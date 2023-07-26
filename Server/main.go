@@ -52,7 +52,7 @@ func main() {
 	r.POST("/create/", e.CreateShort)
 	r.GET("/:path", e.GetPath)
 	r.POST("/named/", e.CreateNamed)
-	// r.GET("/:name/:path", e.GetNamed)
+	r.GET("/:path/:name", e.GetNamed)
 
 	r.Run("localhost:8001")
 }
