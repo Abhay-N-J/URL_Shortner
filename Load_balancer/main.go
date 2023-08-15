@@ -85,7 +85,7 @@ func (lb *LoadBalancer) serveProxy(res http.ResponseWriter, req *http.Request) {
 func main() {
 	servers := []Server{
 		serverAllocate("http://127.0.0.1:8001"),
-		// serverAllocate("https://127.0.0.1:8002"),
+		serverAllocate("http://127.0.0.1:8002"),
 		// serverAllocate("https://google.com"),
 		// serverAllocate("https://bing.com"),
 		// serverAllocate("https://yahoo.com"),

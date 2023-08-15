@@ -53,6 +53,10 @@ func main() {
 	r.GET("/:path", e.GetPath)
 	r.POST("/named/", e.CreateNamed)
 	r.GET("/:path/:name", e.GetNamed)
-
-	r.Run("localhost:8001")
+	
+	var port string
+	fmt.Scanln(&port)
+	port = "localhost:" + port
+	r.Run(port)
 }
+
