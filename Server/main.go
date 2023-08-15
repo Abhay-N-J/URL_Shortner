@@ -16,14 +16,14 @@ import (
 func welcomeFunc(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"Usage": gin.H{
-			"Any /":        "Welcome Page",
-			"/path":        "GET request Redirects to the long URL",
-			"/create/path": "POST request with path of Long URL, return short URL",
+			"/home":      "Welcome Page",
+			"/path":      "GET request Redirects to the long URL",
+			"/create/":   "POST request with path of Long URL, return short URL",
+			"/path/user": "GET request Redirects the Named Short URL to long URL",
+			"/named/":    "POST request with Long URL, short URL, username, email, password, expiry(hrs)",
 		},
 	})
 }
-
-// TODO: implement route for named shortURLs
 
 func main() {
 
@@ -53,10 +53,9 @@ func main() {
 	r.GET("/:path", e.GetPath)
 	r.POST("/named/", e.CreateNamed)
 	r.GET("/:path/:name", e.GetNamed)
-	
+
 	var port string
 	fmt.Scanln(&port)
 	port = "localhost:" + port
 	r.Run(port)
 }
-
